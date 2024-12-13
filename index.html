@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konfigurator</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; }
+  .section { margin-bottom: 20px; }
+  label { display: block; margin-bottom: 5px; }
+</style>
+</head>
+<body>
+<h1>Konfigurator</h1>
+
+<div class="section">
+  <h2>Hauptprodukt wählen</h2>
+  <select id="mainProduct">
+    <option value="basic" data-monthly="10" data-yearly="100">Basic (10€/Monat oder 100€/Jahr)</option>
+    <option value="pro" data-monthly="20" data-yearly="200">Pro (20€/Monat oder 200€/Jahr)</option>
+    <option value="enterprise" data-monthly="50" data-yearly="500">Enterprise (50€/Monat oder 500€/Jahr)</option>
+  </select>
+</div>
+
+<div class="section">
+  <h2>Zahlungsintervall</h2>
+  <label><input type="radio" name="billing" value="monthly" checked> Monatlich</label>
+  <label><input type="radio" name="billing" value="yearly"> Jährlich (Rabatt!)</label>
+</div>
+
+<div class="section">
+  <h2>Einrichtungsgebühr</h2>
+  <p>Einmalig: <span id="setupFee" data-fee="50">50€</span></p>
+</div>
+
+<div class="section">
+  <h2>Optionale einmalige Zusatzprodukte</h2>
+  <label><input type="checkbox" class="one-time-extra" data-price="20"> Logo-Design (20€ einmalig)</label>
+  <label><input type="checkbox" class="one-time-extra" data-price="30"> Zusätzliche Einrichtung (30€ einmalig)</label>
+</div>
+
+<div class="section">
+  <h2>Optionale Abos</h2>
+  <select id="supportPackage">
+    <option value="none">Kein zusätzliches Abo</option>
+    <option value="basic" data-monthly="5" data-yearly="50">Basic Support (5€/Monat oder 50€/Jahr)</option>
+    <option value="premium" data-monthly="10" data-yearly="100">Premium Support (10€/Monat oder 100€/Jahr)</option>
+  </select>
+</div>
+
+<div class="section">
+  <h2>Steuersatz</h2>
+  <label>Steuer (%): <input type="number" id="taxRate" value="19" style="width:50px;"></label>
+</div>
+
+<div class="section">
+  <h2>Zusammenfassung</h2>
+  <ul id="cartSummary"></ul>
+  <p>Gesamt einmalig: <span id="totalOneTime"></span></p>
+  <p>Gesamt laufend: <span id="totalRecurring"></span></p>
+  <p>Steuerbetrag: <span id="taxAmount"></span></p>
+  <p>Bruttosumme: <span id="totalGross"></span></p>
+</div>
+
+<div class="section">
+  <h2>Kundendaten</h2>
+  <input type="text" id="customerName" placeholder="Name"><br><br>
+  <input type="email" id="customerEmail" placeholder="Email"><br><br>
+  <input type="text" id="customerAddress" placeholder="Adresse"><br>
+</div>
+
+<div class="section">
+  <h2>Bezahlen</h2>
+  <div id="paypal-button-container"></div>
+</div>
+
+<!-- PayPal SDK -->
+<script src="https://www.paypal.com/sdk/js?client-id=IHRE_PAYPAL_CLIENT_ID&currency=EUR"></script>
+<script>
+const mainProductSelect = document.getElementById('mainProduct');
+const billingOptions = document.getElementsByName('billing');
+const setupFeeElem = document.getElementById('setupFee');
+const oneTimeExtras = document.querySelectorAll('.one-time-extra');
+const supportPackage = document.getElementById('supportPackage');
+const cartSummary = document.getElementById('cartSummary');
+const totalOneTime = document.getElementById('totalOneTime');
+const totalRecurring = document.getElementById('totalRecurring');
+const taxRateElem = document.getElementById('taxRate');
+const taxAmountElem = document.getElementById('taxAmount');
+const totalGrossElem = document.getElementById('totalGross');
+const customerName = document.getElementById('customerName');
+const customerEmail = document.getElementById('customerEmail');
+const customerAddress = document.getElementById('customerAddress');
+
+function calculatePrices() {
+  const selectedOption = mainProductSelect.options[mainProductSelect.selectedIndex];
+  const billingType = [...billingOptions].find(r => r.checked).value;
+  const mainPrice = (billingType === 'monthly') 
+    ? parseFloat(selectedOption.dataset.monthly) 
+    : parseFloat(selectedOption.dataset.yearly);
+
+  const setupFee = parseFloat(setupFeeElem.dataset.fee);
+
+  let oneTimeSum = 0;
+  oneTimeExtras.forEach(extra => {
+    if (extra.checked) oneTimeSum += parseFloat(extra.dataset.price);
+  });
+
+  let recurringSum = 0;
+  const supportSelected = supportPackage.options[supportPackage.selectedIndex];
+  if (supportSelected.value !== 'none') {
+    recurringSum += (billingType === 'monthly') 
+      ? parseFloat(supportSelected.dataset.monthly) 
+      : parseFloat(supportSelected.dataset.yearly);
+  }
+
+  const once = setupFee + oneTimeSum;
+  const recurring = mainPrice + recurringSum;
+  
+  const taxRate = parseFloat(taxRateElem.value)/100;
+  const net = once + recurring;
+  const taxAmount = net * taxRate;
+  const gross = net + taxAmount;
+
+  cartSummary.innerHTML = `
+    <li>${selectedOption.textContent} (${billingType === 'monthly' ? mainPrice+'€/Monat' : mainPrice+'€/Jahr'})</li>
+    <li>Einrichtung: ${setupFee}€ einmalig</li>
+    ${Array.from(oneTimeExtras).filter(e=>e.checked).map(e=>"<li>"+e.parentNode.textContent.trim()+"</li>").join('')}
+    ${supportSelected.value !== 'none' ? '<li>'+supportSelected.textContent+'</li>' : ''}
+  `;
+  
+  totalOneTime.textContent = once.toFixed(2)+'€';
+  totalRecurring.textContent = recurring.toFixed(2)+'€';
+  taxAmountElem.textContent = taxAmount.toFixed(2)+'€';
+  totalGrossElem.textContent = gross.toFixed(2)+'€';
+}
+
+[mainProductSelect, ...billingOptions, taxRateElem, supportPackage, ...oneTimeExtras].forEach(el=>{
+  el.addEventListener('change', calculatePrices);
+});
+
+calculatePrices();
+
+paypal.Buttons({
+  createOrder: (data, actions) => {
+    calculatePrices();
+    const gross = parseFloat(totalGrossElem.textContent);
+    return actions.order.create({
+      purchase_units: [{
+        amount: {
+          value: gross.toFixed(2)
+        }
+      }]
+    });
+  },
+  onApprove: (data, actions) => {
+    return actions.order.capture().then(details => {
+      const orderData = {
+        orderId: details.id,
+        payer: details.payer,
+        customerName: customerName.value,
+        customerEmail: customerEmail.value,
+        customerAddress: customerAddress.value,
+        products: cartSummary.innerText.split('\n').filter(x=>x),
+        total: totalGrossElem.textContent
+      };
+      // Falls Zapier-Integration gewünscht ist, hier Ihre Webhook-URL eintragen:
+      // fetch('IHRE_ZAPIER_WEBHOOK_URL', {
+      //   method: 'POST',
+      //   headers: {'Content-Type': 'application/json'},
+      //   body: JSON.stringify(orderData)
+      // });
+
+      alert("Zahlung erfolgreich!");
+    });
+  }
+}).render('#paypal-button-container');
+</script>
+</body>
+</html>
